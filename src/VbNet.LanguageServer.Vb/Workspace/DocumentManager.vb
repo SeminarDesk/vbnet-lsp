@@ -15,6 +15,8 @@ Namespace Workspace
     ''' Handles LSP text document sync operations (didOpen, didChange, didClose).
     ''' </summary>
     Public NotInheritable Class DocumentManager
+        Friend Const ByteOrderMark As Char = ChrW(&HFEFF)
+
         Private ReadOnly _workspaceManager As WorkspaceManager
         Private ReadOnly _logger As ILogger(Of DocumentManager)
 
@@ -79,9 +81,10 @@ Namespace Workspace
 
             _logger.LogDebug("Opening document: {Uri} (version {Version}, language {LanguageId})", uri, version, languageId)
 
-            Dim sourceText As SourceText = SourceText.From(text)
+            Dim sourceText As SourceText = FromClientText(text)
 
             Dim openDoc As New OpenDocument(uri, languageId, version, sourceText, Nothing)
+            openDoc.StartsWithByteOrderMark = StartsWithByteOrderMark(text)
             _openDocuments(uri) = openDoc
 
             If SynchronizeOpenDocumentWithWorkspace(openDoc) IsNot Nothing Then
@@ -114,7 +117,7 @@ Namespace Workspace
 
             _logger.LogTrace("Document changed: {Uri} (version {OldVersion} -> {NewVersion})", uri, openDoc.Version, version)
 
-            Dim newText = ApplyChanges(openDoc.Text, parameters.ContentChanges)
+            Dim newText = ApplyChanges(openDoc, parameters.ContentChanges)
 
             openDoc.Text = newText
             openDoc.Version = version
@@ -154,8 +157,9 @@ Namespace Workspace
             End If
 
             If parameters.Text IsNot Nothing Then
-                Dim newText = SourceText.From(parameters.Text)
+                Dim newText = FromClientText(parameters.Text)
                 openDoc.Text = newText
+                openDoc.StartsWithByteOrderMark = StartsWithByteOrderMark(parameters.Text)
             End If
 
             SynchronizeOpenDocumentWithWorkspace(openDoc)
@@ -226,15 +230,37 @@ Namespace Workspace
         End Function
 
         ''' <summary>
-        ''' Applies a list of content changes to source text.
+        ''' Builds the source text for content a client sent. A client that reads a UTF-8 file with a byte
+        ''' order mark may send the mark as a leading U+FEFF, which the VB parser reports as an invalid
+        ''' character. It becomes a space, so every position the client sends still lines up.
+        ''' <see cref="OpenDocument.StartsWithByteOrderMark"/> records that the space stands for the mark.
+        ''' </summary>
+        Private Shared Function FromClientText(text As String) As SourceText
+            If StartsWithByteOrderMark(text) Then
+                text = " " & text.Substring(1)
+            End If
+            Return SourceText.From(text)
+        End Function
+
+        Private Shared Function StartsWithByteOrderMark(text As String) As Boolean
+            Return text IsNot Nothing AndAlso text.Length > 0 AndAlso text(0) = ByteOrderMark
+        End Function
+
+        ''' <summary>
+        ''' Applies a list of content changes to an open document's text.
         ''' Supports both incremental and full document changes.
         ''' </summary>
-        Private Function ApplyChanges(text As SourceText, changes As TextDocumentContentChangeEvent()) As SourceText
+        Private Function ApplyChanges(openDoc As OpenDocument, changes As TextDocumentContentChangeEvent()) As SourceText
+            Dim text = openDoc.Text
             For Each change In changes
                 If change.Range Is Nothing Then
-                    text = SourceText.From(change.Text)
+                    text = FromClientText(change.Text)
+                    openDoc.StartsWithByteOrderMark = StartsWithByteOrderMark(change.Text)
                 Else
                     Dim span = GetTextSpan(change.Range, text)
+                    If span.Start = 0 Then
+                        openDoc.StartsWithByteOrderMark = False
+                    End If
                     Dim textChange = New TextChange(span, change.Text)
                     text = text.WithChanges(textChange)
                 End If
@@ -408,6 +434,12 @@ Namespace Workspace
         ''' The current source text.
         ''' </summary>
         Public Property Text As SourceText
+
+        ''' <summary>
+        ''' True when the client's text begins with a byte order mark (U+FEFF). <see cref="Text"/> holds
+        ''' a space at offset 0 in its place, so edits sent back to the client must restore the mark there.
+        ''' </summary>
+        Public Property StartsWithByteOrderMark As Boolean
 
         ''' <summary>
         ''' The Roslyn DocumentId if this document is in the workspace.

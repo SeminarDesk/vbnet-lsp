@@ -106,6 +106,25 @@ Namespace VbNet.LanguageServer.Tests.Services
         End Function
 
         <Fact>
+        Public Async Function ComputeAndPublishDiagnosticsAsync_TextWithByteOrderMark_ReportsNoErrors() As Task
+            Dim uri = "file:///c:/test/withbom.vb"
+
+            _documentManager.HandleDidOpen(New DidOpenTextDocumentParams With {
+                .TextDocument = New TextDocumentItem With {
+                    .Uri = uri,
+                    .LanguageId = "vb",
+                    .Version = 1,
+                    .Text = ChrW(&HFEFF) & "Imports System" & vbLf & "Module Module1" & vbLf & "End Module"
+                }
+            })
+
+            Await _diagnosticsService.ComputeAndPublishDiagnosticsAsync(uri)
+            Dim published = Await WaitForPublishAsync()
+
+            Assert.DoesNotContain(published.Diagnostics, Function(d) d.Severity.GetValueOrDefault() = DiagnosticSeverity.Error)
+        End Function
+
+        <Fact>
         Public Async Function ComputeAndPublishDiagnosticsAsync_DefersStandaloneDiagnosticsWhileInitialLoadPending() As Task
             Dim uri = "file:///c:/test/module1.vb"
 

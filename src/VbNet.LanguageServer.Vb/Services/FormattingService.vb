@@ -77,12 +77,27 @@ Namespace Services
             Dim formattedText = Await formattedDocument.GetTextAsync(cancellationToken).ConfigureAwait(False)
             Dim finalText = If(range Is Nothing, ApplyPostFormattingOptions(formattedText, options), formattedText)
 
+            Dim openDoc = _documentManager.GetOpenDocument(uri)
+            If openDoc IsNot Nothing AndAlso openDoc.StartsWithByteOrderMark Then
+                sourceText = WithByteOrderMark(sourceText)
+                finalText = WithByteOrderMark(finalText)
+            End If
+
             If finalText.ContentEquals(sourceText) Then
                 Return Array.Empty(Of TextEdit)()
             End If
 
             Dim changes = finalText.GetTextChanges(sourceText)
             Return changes.Select(Function(change) CreateTextEdit(change, sourceText)).ToArray()
+        End Function
+
+        ''' <summary>
+        ''' Puts the client's byte order mark back at offset 0, where the server text holds a space in
+        ''' its place. The formatter may have removed that space as leading whitespace.
+        ''' </summary>
+        Private Shared Function WithByteOrderMark(text As SourceText) As SourceText
+            Dim replaced = If(text.Length > 0 AndAlso text(0) = " "c, New TextSpan(0, 1), New TextSpan(0, 0))
+            Return text.WithChanges(New TextChange(replaced, DocumentManager.ByteOrderMark))
         End Function
 
         Private Shared Function ApplyFormattingOptions(optionSet As OptionSet, language As String, options As LspFormattingOptions) As OptionSet

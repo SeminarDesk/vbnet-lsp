@@ -152,6 +152,55 @@ Namespace VbNet.LanguageServer.Tests.Integration
         End Function
 
         <Fact>
+        Public Async Function GetDocumentSymbolsAsync_PartialClassAcrossFiles_ReturnsOnlyMembersOfRequestedFile() As Task
+            Dim projectDir = Path.Combine(Path.GetTempPath(), "vbnet-lsp-partial-" & Guid.NewGuid().ToString("N"))
+            Directory.CreateDirectory(projectDir)
+            Try
+                Dim projectPath = Path.Combine(projectDir, "PartialProject.vbproj")
+                File.WriteAllText(projectPath,
+                    "<Project Sdk=""Microsoft.NET.Sdk"">" & vbLf &
+                    "  <PropertyGroup>" & vbLf &
+                    "    <OutputType>Library</OutputType>" & vbLf &
+                    "    <TargetFramework>net10.0</TargetFramework>" & vbLf &
+                    "  </PropertyGroup>" & vbLf &
+                    "</Project>")
+
+                Dim shortPath = Path.Combine(projectDir, "Split.vb")
+                Dim shortText = "Partial Public Class Split" & vbLf & "    Public Sub Near()" & vbLf & "    End Sub" & vbLf & "End Class"
+                File.WriteAllText(shortPath, shortText)
+
+                ' The other part is longer than the requested file, so its member spans lie beyond that file's end.
+                Dim padding = String.Concat(Enumerable.Repeat("    ' padding" & vbLf, 50))
+                File.WriteAllText(Path.Combine(projectDir, "Split.More.vb"),
+                    "Partial Public Class Split" & vbLf & padding & "    Public Sub FarAway()" & vbLf & "    End Sub" & vbLf & "End Class")
+
+                Assert.True(Await _workspaceManager.LoadProjectAsync(projectPath))
+
+                Dim shortUri = New Uri(shortPath).ToString()
+                _documentManager.HandleDidOpen(New DidOpenTextDocumentParams With {
+                    .TextDocument = New TextDocumentItem With {
+                        .Uri = shortUri,
+                        .LanguageId = "vb",
+                        .Version = 1,
+                        .Text = shortText
+                    }
+                })
+                Assert.NotNull(_documentManager.GetRoslynDocument(shortUri))
+
+                Dim result = Await _symbolsService.GetDocumentSymbolsAsync(New DocumentSymbolParams With {
+                    .TextDocument = New TextDocumentIdentifier With {.Uri = shortUri}
+                }, CancellationToken.None)
+
+                Dim splitSymbol = Assert.Single(result, Function(symbol) symbol.Name = "Split")
+                Dim memberNames = splitSymbol.Children.Select(Function(child) child.Name).ToArray()
+                Assert.Contains("Near", memberNames)
+                Assert.DoesNotContain("FarAway", memberNames)
+            Finally
+                Directory.Delete(projectDir, recursive:=True)
+            End Try
+        End Function
+
+        <Fact>
         Public Async Function GetWorkspaceSymbolsAsync_FindsClassByName() As Task
             Dim projectPath = Path.Combine(TestProjectsRoot, "SmallProject", "SmallProject.vbproj")
 

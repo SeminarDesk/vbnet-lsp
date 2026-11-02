@@ -471,7 +471,7 @@ Namespace Services
                     Continue For
                 End If
 
-                Dim memberLocation = member.Locations.FirstOrDefault(Function(l) l.IsInSource)
+                Dim memberLocation = member.Locations.FirstOrDefault(Function(l) l.IsInSource AndAlso l.SourceTree Is node.SyntaxTree AndAlso node.FullSpan.Contains(l.SourceSpan))
                 If memberLocation Is Nothing Then
                     Continue For
                 End If
@@ -494,7 +494,7 @@ Namespace Services
                     Continue For
                 End If
 
-                Dim nestedLocation = nestedType.Locations.FirstOrDefault(Function(l) l.IsInSource)
+                Dim nestedLocation = nestedType.Locations.FirstOrDefault(Function(l) l.IsInSource AndAlso l.SourceTree Is node.SyntaxTree AndAlso node.FullSpan.Contains(l.SourceSpan))
                 If nestedLocation Is Nothing Then
                     Continue For
                 End If

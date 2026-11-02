@@ -25,6 +25,7 @@ Namespace Workspace
         Private ReadOnly _initialLoadTcs As TaskCompletionSource(Of Boolean) =
             New TaskCompletionSource(Of Boolean)(TaskCreationOptions.RunContinuationsAsynchronously)
         Private _initialLoadSignaled As Integer
+        Private _initialLoadStarted As Integer
 
         Private _workspace As MSBuildWorkspace
         Private _currentSolution As Solution
@@ -593,6 +594,23 @@ Namespace Workspace
             RaiseEvent WorkspaceDiagnostic(
                 Me,
                 New WorkspaceDiagnosticEventArgs(New WorkspaceDiagnostic(WorkspaceDiagnosticKind.Warning, message)))
+        End Sub
+
+        ''' <summary>
+        ''' Gets whether the initial workspace load is running: it was started with
+        ''' <see cref="SignalInitialLoadStarted"/> and has not completed.
+        ''' </summary>
+        Public ReadOnly Property IsInitialLoadRunning As Boolean
+            Get
+                Return Volatile.Read(_initialLoadStarted) = 1 AndAlso Not _initialLoadTcs.Task.IsCompleted
+            End Get
+        End Property
+
+        ''' <summary>
+        ''' Signals that the initial workspace load has started.
+        ''' </summary>
+        Public Sub SignalInitialLoadStarted()
+            Interlocked.Exchange(_initialLoadStarted, 1)
         End Sub
 
         ''' <summary>

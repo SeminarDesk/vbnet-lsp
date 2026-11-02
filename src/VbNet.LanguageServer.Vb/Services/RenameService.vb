@@ -49,7 +49,7 @@ Namespace Services
 
             _logger.LogDebug("PrepareRename requested at {Uri} ({Line}:{Character})", uri, position.Line, position.Character)
 
-            Dim document = _documentManager.GetRoslynDocument(uri)
+            Dim document = Await _documentManager.GetRoslynDocumentAsync(uri, cancellationToken).ConfigureAwait(False)
             If document Is Nothing Then
                 _logger.LogTrace("No Roslyn document found for: {Uri}", uri)
                 Return Nothing
@@ -118,7 +118,7 @@ Namespace Services
 
             _logger.LogDebug("Rename requested at {Uri} ({Line}:{Character}) to '{NewName}'", uri, position.Line, position.Character, newName)
 
-            Dim document = _documentManager.GetRoslynDocument(uri)
+            Dim document = Await _documentManager.GetRoslynDocumentAsync(uri, cancellationToken).ConfigureAwait(False)
             If document Is Nothing Then
                 _logger.LogTrace("No Roslyn document found for: {Uri}", uri)
                 Return Nothing

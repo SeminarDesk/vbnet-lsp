@@ -17,6 +17,12 @@ Namespace Workspace
     Public NotInheritable Class DocumentManager
         Friend Const ByteOrderMark As Char = ChrW(&HFEFF)
 
+        ''' <summary>
+        ''' How long a cross-document request waits for the initial workspace load. A large solution
+        ''' takes tens of seconds when MSBuild starts cold.
+        ''' </summary>
+        Private Shared ReadOnly InitialLoadWait As TimeSpan = TimeSpan.FromSeconds(60)
+
         Private ReadOnly _workspaceManager As WorkspaceManager
         Private ReadOnly _logger As ILogger(Of DocumentManager)
 
@@ -178,6 +184,22 @@ Namespace Workspace
             End If
 
             Return SynchronizeOpenDocumentWithWorkspace(openDoc)
+        End Function
+
+        ''' <summary>
+        ''' Gets the current Roslyn Document for a request that resolves symbols across documents.
+        ''' While the initial workspace load runs, a document the load has not reached yet belongs to no
+        ''' project, and such a request would find nothing; for that document this waits for the load,
+        ''' up to <see cref="InitialLoadWait"/>, and then answers with whatever is loaded.
+        ''' </summary>
+        Public Async Function GetRoslynDocumentAsync(uri As String, cancellationToken As CancellationToken) As Task(Of Document)
+            Dim document = GetRoslynDocument(uri)
+            If document IsNot Nothing OrElse Not _workspaceManager.IsInitialLoadRunning Then
+                Return document
+            End If
+
+            Await _workspaceManager.WaitForInitialLoadAsync(InitialLoadWait, cancellationToken).ConfigureAwait(False)
+            Return GetRoslynDocument(uri)
         End Function
 
         ''' <summary>

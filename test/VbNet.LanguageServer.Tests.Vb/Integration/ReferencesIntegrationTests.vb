@@ -92,6 +92,44 @@ Namespace VbNet.LanguageServer.Tests.Integration
         End Function
 
         <Fact>
+        Public Async Function GetReferencesAsync_RequestedWhileInitialLoadPending_FindsReferencesInOtherFiles() As Task
+            Dim projectPath = Path.Combine(TestProjectsRoot, "SmallProject", "SmallProject.vbproj")
+            Dim helperPath = Path.Combine(TestProjectsRoot, "SmallProject", "Helper.vb")
+
+            If Not File.Exists(projectPath) Then
+                Return
+            End If
+
+            ' A client may ask as soon as it opens a file, while the server is still loading the projects.
+            Dim helperUri = New Uri(helperPath).ToString()
+            Dim text = Await File.ReadAllTextAsync(helperPath)
+            _documentManager.HandleDidOpen(New DidOpenTextDocumentParams With {
+                .TextDocument = New TextDocumentItem With {
+                    .Uri = helperUri,
+                    .LanguageId = "vb",
+                    .Version = 1,
+                    .Text = text
+                }
+            })
+            _workspaceManager.SignalInitialLoadStarted()
+
+            Dim lines = text.Split(ControlChars.Lf)
+            Dim lineIndex = Array.FindIndex(lines, Function(line) line.Contains("Public Class BaseHelper"))
+            Dim request = New ReferenceParams With {
+                .TextDocument = New TextDocumentIdentifier With {.Uri = helperUri},
+                .Position = New Position With {.Line = lineIndex, .Character = lines(lineIndex).IndexOf("BaseHelper", StringComparison.Ordinal) + 2},
+                .Context = New ReferenceContext With {.IncludeDeclaration = False}
+            }
+            Dim pending = _referencesService.GetReferencesAsync(request, CancellationToken.None)
+
+            Assert.True(Await _workspaceManager.LoadProjectAsync(projectPath))
+            _workspaceManager.SignalInitialLoadCompleted(True)
+
+            Dim result = Await pending
+            Assert.Contains(result, Function(location) location.Uri.EndsWith("Module1.vb", StringComparison.OrdinalIgnoreCase))
+        End Function
+
+        <Fact>
         Public Async Function GetReferencesAsync_OnClassDefinition_FindsReferences() As Task
             Dim projectPath = Path.Combine(TestProjectsRoot, "SmallProject", "SmallProject.vbproj")
             Dim helperPath = Path.Combine(TestProjectsRoot, "SmallProject", "Helper.vb")

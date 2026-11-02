@@ -47,7 +47,7 @@ Namespace Services
 
             _logger.LogDebug("Type hierarchy prepare requested at {Uri} ({Line}:{Character})", uri, position.Line, position.Character)
 
-            Dim document = _documentManager.GetRoslynDocument(uri)
+            Dim document = Await _documentManager.GetRoslynDocumentAsync(uri, cancellationToken).ConfigureAwait(False)
             If document Is Nothing Then
                 _logger.LogTrace("No Roslyn document found for: {Uri}", uri)
                 Return Array.Empty(Of TypeHierarchyItem)()
@@ -189,7 +189,7 @@ Namespace Services
                 Return Nothing
             End If
 
-            Dim document = _documentManager.GetRoslynDocument(item.Uri)
+            Dim document = Await _documentManager.GetRoslynDocumentAsync(item.Uri, cancellationToken).ConfigureAwait(False)
             If document Is Nothing Then
                 Return Nothing
             End If

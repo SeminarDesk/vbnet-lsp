@@ -49,7 +49,7 @@ Namespace Services
 
             _logger.LogDebug("References requested at {Uri} ({Line}:{Character}), includeDeclaration={IncludeDecl}", uri, position.Line, position.Character, includeDeclaration)
 
-            Dim document = _documentManager.GetRoslynDocument(uri)
+            Dim document = Await _documentManager.GetRoslynDocumentAsync(uri, cancellationToken).ConfigureAwait(False)
             If document Is Nothing Then
                 _logger.LogTrace("No Roslyn document found for: {Uri}", uri)
                 Return Array.Empty(Of Protocol.Location)()

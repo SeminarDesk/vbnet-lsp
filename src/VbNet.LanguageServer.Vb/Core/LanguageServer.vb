@@ -511,6 +511,7 @@ Namespace Core
         End Function
 
         Private Sub StartInitialWorkspaceLoad(rootUri As String)
+            _workspaceManager.SignalInitialLoadStarted()
             StartWorkspaceLoad(rootUri, "Initial workspace load", False)
         End Sub
 

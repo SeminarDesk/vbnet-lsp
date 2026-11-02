@@ -11,7 +11,9 @@ All notable changes to this project will be documented in this file.
 - _None yet._
 
 ### Fixed
-- _None yet._
+- `textDocument/documentSymbol` no longer fails for a `Partial` class declared across several files; the outline of a file lists only the members declared in that file.
+- Document text that starts with a UTF-8 byte order mark (sent by some clients as a leading U+FEFF) no longer produces invalid-character errors; formatting edits keep the mark.
+- Cross-document requests (references, definition, type definition, implementation, hover, rename, call and type hierarchy) sent while the initial workspace load is still running wait for that load instead of returning nothing for a document whose project is not loaded yet.
 
 ### Known issues
 - _None yet._
